@@ -222,6 +222,44 @@ class Method(abc.ABC):
         return prompts
 
     @staticmethod
+    def stepback(calids: List[int], notes: List[str], questions: List[str]) -> List[Tuple[str, str]]:
+        """
+        Create zero-shot chain-of-thought (CoT) prompts for multiple medical calculation tasks.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            system_msg = (
+                "You are a helpful assistant for calculating a score for a given patient note. "
+                "Before solving a medical calculation task, first identify the broader medical rule, principle, or scoring system that the question depends on."
+                "Then use that principle to extract the necessary variables from the patient note, apply the correct formula carefully, and verify consistency before producing the final value. "
+                "Please think step-by-step to solve the question and then generate the required score. "
+                "Your output should only contain a JSON dict formatted as "
+                '{"step_by_step_thinking": str(your_step_by_step_thinking_procress_to_solve_the_question), '
+                '"answer": str(short_and_direct_answer_of_the_question)}.'
+            )
+            user_msg = (
+                f"Here is the patient note:\n{note}\n\n"
+                f"Here is the task:\n{question}\n\n"
+                "Please:\n"
+                "Identify the general medical rule or formula relevant to this question.\n"
+                "From the patient note, extract all variables required by that rule.\n"
+                'Please directly output your_step_by_step_thinking_procress_to_solve_the_question, '
+                'and the answer formatted as "answer": str(short_and_direct_answer_of_the_question):'
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts 
+
+    @staticmethod
     def one_shot(calids: List[str], notes: List[str], questions: List[str]) -> List[Tuple[str, str]]:
         """
         Create one-shot prompts for multiple medical calculation tasks.
