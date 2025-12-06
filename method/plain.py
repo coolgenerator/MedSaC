@@ -109,7 +109,8 @@ class Plain(Method):
             safe_model_name = model_name.replace("/", "_")  # file‑system safe
 
             schema = prompt_style_to_schema(self.prompt_style)
-            generations = llm.generate(prompts, schema=schema)
+            task_desc = f"[{self.prompt_style.upper()}] Generating answers"
+            generations = llm.generate(prompts, schema=schema, task_desc=task_desc)
             (
                 self.responses[model_name],
                 self.input_tokens[model_name],

@@ -20,18 +20,18 @@ SYS_MSG = (
 
 def _parse_replies(raw_replies: List[Any]) -> List[Dict[str, Any]]:
     """
-    Convert DeepSeek’s raw output into a uniform list of dictionaries:
+    Convert Gemini's raw output into a uniform list of dictionaries:
 
         [{"error_present": str, "explanation": str}, …]
 
     Robust to all known return formats:
 
-    • (dict, in_tok, out_tok)                 ← new DeepSeek format
-    • (str,  in_tok, out_tok)                 ← legacy DeepSeek format
+    • (dict, in_tok, out_tok)                 ← structured output format
+    • (str,  in_tok, out_tok)                 ← text output format
     • plain str
-    • dicts / tuples / lists (OpenAI-style)
+    • dicts / tuples / lists
     • Markdown-wrapped JSON  ```json … ```
-    • Free-text with key–value phrases (“error_present: Yes …”)
+    • Free-text with key–value phrases ("error_present: Yes …")
     """
 
     # ---------- regex compiled once -------------------------------
@@ -138,7 +138,7 @@ def _parse_replies(raw_replies: List[Any]) -> List[Dict[str, Any]]:
     return parsed
 
 
-def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str) -> None:
+def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str = None, model: APIModel = None) -> None:
     """
     Evaluate eight classes of error types for every row in `input_json`
     and save the combined results under `output_json_dir`.
@@ -164,13 +164,16 @@ def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str) 
     notes          = df["Patient Note"].tolist()
     questions      = df["Question"].tolist()
 
-    deepseek = APIModel(
-        model_name,
-        # "OpenAI/gpt-4.1-mini",
-        rpm_limit=600,
-        tpm_limit=5_000_000,
-        temperature=0.1,
-    )
+    # Use provided model or create a new one
+    if model is not None:
+        gemini = model
+    else:
+        gemini = APIModel(
+            model_name or 'VertexAI/gemini-2.5-flash',
+            rpm_limit=500,        # Conservative to share quota
+            tpm_limit=2_000_000,  # 2M tokens/min
+            temperature=0.1,
+        )
 
     # ---------- build prompts (functions defined elsewhere) -------------
     prompts_formula = build_formula_error_prompts(
@@ -262,7 +265,20 @@ def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str) 
     _add("round",   prompts_round)
 
     # ---------- single generate ----------------------------------------
-    all_results = _parse_replies(deepseek.generate(prompts=all_prompts))
+    print(f"\n[ERROR ANALYSIS] Processing {len(all_prompts)} prompts across 8 error types...")
+    print(f"  - Formula errors: {slices['formula'][1] - slices['formula'][0]}")
+    print(f"  - Variable extraction: {slices['var'][1] - slices['var'][0]}")
+    print(f"  - Clinical misinterpretation: {slices['cmis'][1] - slices['cmis'][0]}")
+    print(f"  - Missing variables: {slices['miss'][1] - slices['miss'][0]}")
+    print(f"  - Unit conversion: {slices['unit'][1] - slices['unit'][0]}")
+    print(f"  - Adjustment coefficients: {slices['adj'][1] - slices['adj'][0]}")
+    print(f"  - Arithmetic errors: {slices['arith'][1] - slices['arith'][0]}")
+    print(f"  - Rounding errors: {slices['round'][1] - slices['round'][0]}")
+
+    all_results = _parse_replies(gemini.generate(
+        prompts=all_prompts,
+        task_desc="[ERROR ANALYSIS] Analyzing 8 error types"
+    ))
 
     def _slice(name: str) -> List[Dict[str, Any]]:
         a, b = slices[name]

@@ -8,10 +8,11 @@ from pydantic import BaseModel
 from model.model import LLM
 from tqdm import tqdm
 import nest_asyncio
-import google.auth
 from google.oauth2 import service_account
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
+
+# New unified SDK (pip install google-genai)
+from google import genai
+from google.genai import types
 
 nest_asyncio.apply()
 
@@ -21,10 +22,11 @@ CREDENTIAL_PATH = os.path.join(os.path.dirname(__file__), "vertex-ai-credential.
 class APIModel(LLM):
     def __init__(
         self,
-        model_name: str = "VertexAI/gemini-2.5-flash",
+        model_name: str = "VertexAI/gemini-2.0-flash",
         temperature: float = 1.0,
         rpm_limit: Optional[int] = None,
         tpm_limit: Optional[int] = None,
+        disable_thinking: bool = True,
     ):
         """
         Args:
@@ -32,8 +34,11 @@ class APIModel(LLM):
             temperature: sampling temperature
             rpm_limit: max requests per rolling 60-second window
             tpm_limit: max tokens (in+out) per rolling 60-second window
+            disable_thinking: If True, disable thinking mode for 2.5 models (default: True)
         """
         super().__init__(model_name=model_name, temperature=temperature)
+
+        self.disable_thinking = disable_thinking
 
         # rate-limiting state
         self._req_times = deque()
@@ -71,24 +76,23 @@ class APIModel(LLM):
         self.requests_made = 0
         print(f'{self.model_name} max_tokens: {self.max_tokens}, rpm_limit: {self.rpm_limit}, tpm_limit: {self.tpm_limit}')
 
-        # Initialize Vertex AI with service account credentials
-        credentials = service_account.Credentials.from_service_account_file(
-            CREDENTIAL_PATH,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-
         # Read project_id from credential file
         with open(CREDENTIAL_PATH, 'r') as f:
             cred_data = json.load(f)
-            project_id = cred_data.get("project_id")
+            self.project_id = cred_data.get("project_id")
 
-        vertexai.init(
-            project=project_id,
-            location="us-central1",
-            credentials=credentials
+        # Set credentials for google-genai SDK
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIAL_PATH
+
+        # Initialize new unified SDK client (pip install google-genai)
+        self.client = genai.Client(
+            vertexai=True,
+            project=self.project_id,
+            location="us-central1"
         )
 
-        self.client = GenerativeModel(self.model_name)
+        if self.disable_thinking and "2.5" in self.model_name:
+            print(f"  Thinking mode: DISABLED (thinking_budget=0)")
 
     async def _throttle(self, tokens_est: int):
         async with self._throttle_lock:
@@ -134,45 +138,66 @@ class APIModel(LLM):
         self,
         system_msg: str,
         user_msg: str,
-        schema: Optional[Type[BaseModel]] = None
+        schema: Optional[Type[BaseModel]] = None,
+        request_id: int = 0
     ) -> Tuple[object, int, int]:
+        """Each request has its own independent retry loop (max 10 retries)."""
         est_tokens = (self.tokens_used / self.requests_made) * 1.5 if self.requests_made != 0 else self.max_tokens
         reserve_entry = await self._throttle(est_tokens)
 
-        generation_config = GenerationConfig(
-            temperature=self.temperature,
-            max_output_tokens=self.max_tokens,
-        )
+        # Build generation config using new unified SDK
+        config_params = {
+            "temperature": self.temperature,
+            "max_output_tokens": self.max_tokens,
+        }
+
+        # Disable thinking mode for Gemini 2.5 to prevent token exhaustion
+        if self.disable_thinking and "2.5" in self.model_name:
+            config_params["thinking_config"] = types.ThinkingConfig(
+                include_thoughts=False,
+                thinking_budget=0  # Disable thinking
+            )
 
         if schema is not None:
-            generation_config = GenerationConfig(
-                temperature=self.temperature,
-                max_output_tokens=self.max_tokens,
-                response_mime_type="application/json",
-            )
+            config_params["response_mime_type"] = "application/json"
+
+        generation_config = types.GenerateContentConfig(**config_params)
 
         combined_prompt = f"{system_msg}\n\n{user_msg}"
 
-        max_retries = 3
+        # Each request has independent retry counter (resets to 0 for each new request)
+        max_retries = 10
         for attempt in range(1, max_retries + 1):
             try:
                 response = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: self.client.generate_content(
-                        combined_prompt,
-                        generation_config=generation_config,
+                    lambda: self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=combined_prompt,
+                        config=generation_config,
                     )
                 )
                 break
             except Exception as e:
-                print(f"Vertex AI request failed (try {attempt}/{max_retries}): {type(e).__name__}: {e}")
-                if attempt < max_retries:
-                    await asyncio.sleep(1)
-        else:
-            raise RuntimeError("Vertex AI failed after 3 retries")
+                error_msg = str(e)
+                is_rate_limit = "429" in error_msg or "ResourceExhausted" in error_msg or "RESOURCE_EXHAUSTED" in error_msg
 
-        input_tokens = response.usage_metadata.prompt_token_count
-        output_tokens = response.usage_metadata.candidates_token_count
+                if attempt < max_retries:
+                    # Exponential backoff: 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 seconds
+                    wait_time = 2 ** attempt
+                    if is_rate_limit:
+                        print(f"[Req {request_id}] Rate limited (try {attempt}/{max_retries}), waiting {wait_time}s...")
+                    else:
+                        print(f"[Req {request_id}] Failed (try {attempt}/{max_retries}): {type(e).__name__}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    print(f"[Req {request_id}] Failed (try {attempt}/{max_retries}): {type(e).__name__}: {e}")
+        else:
+            raise RuntimeError(f"[Req {request_id}] Vertex AI failed after 10 retries")
+
+        # Extract token counts from new SDK response format
+        input_tokens = response.usage_metadata.prompt_token_count if response.usage_metadata else 0
+        output_tokens = response.usage_metadata.candidates_token_count if response.usage_metadata else 0
 
         async with self._throttle_lock:
             total = input_tokens + output_tokens
@@ -180,7 +205,17 @@ class APIModel(LLM):
             self.requests_made += 1
             reserve_entry[1] = total
 
-        text = response.text
+        # Handle cases where response has no text (e.g., MAX_TOKENS, safety filters)
+        try:
+            text = response.text
+        except (ValueError, AttributeError) as e:
+            # Check finish reason
+            finish_reason = None
+            if response.candidates:
+                finish_reason = response.candidates[0].finish_reason
+            print(f"Warning: No response text. Finish reason: {finish_reason}. Error: {e}")
+            return {"error": str(finish_reason), "answer": ""}, input_tokens, output_tokens
+
         try:
             result = json.loads(text)
         except json.JSONDecodeError:
@@ -192,11 +227,12 @@ class APIModel(LLM):
         self,
         prompts: List[Tuple[str, str]],
         schema: Optional[Type[BaseModel]] = None,
-        show_progress: bool = True
+        show_progress: bool = True,
+        task_desc: Optional[str] = None,
     ) -> List[Tuple[str, int, int]]:
 
         async def _wrap(idx: int, sys_msg: str, user_msg: str):
-            out = await self._generate_single(sys_msg, user_msg, schema)
+            out = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
             return idx, out
 
         tasks = [
@@ -210,10 +246,11 @@ class APIModel(LLM):
             return [res for _, res in done]
 
         results: List[Optional[Tuple[str, int, int]]] = [None] * len(prompts)
+        desc = task_desc if task_desc else f"Generating ({self.model_name})"
         for coro in tqdm(
             asyncio.as_completed(tasks),
             total=len(tasks),
-            desc=f"Generating From {self.model_name}..."
+            desc=desc
         ):
             idx, res = await coro
             results[idx] = res
@@ -225,8 +262,9 @@ class APIModel(LLM):
         prompts: List[Tuple[str, str]],
         schema: Optional[Type[BaseModel]] = None,
         show_progress: bool = True,
+        task_desc: Optional[str] = None,
         **kwargs
     ) -> List[Tuple[str, int, int]]:
         return asyncio.run(
-            self.generate_async(prompts, schema, show_progress=show_progress)
+            self.generate_async(prompts, schema, show_progress=show_progress, task_desc=task_desc)
         )

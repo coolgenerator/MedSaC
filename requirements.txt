@@ -5,9 +5,8 @@ pydantic==2.11.7
 python-dotenv==1.1.1
 tqdm==4.67.1
 
-# Vertex AI / Gemini
-google-cloud-aiplatform>=1.38.0
-vertexai>=1.38.0
+# Vertex AI / Gemini (new unified SDK)
+google-genai>=1.0.0
 
 # RAG dependencies (local HuggingFace embeddings, no API key needed)
 langchain>=0.3.0

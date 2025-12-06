@@ -1,7 +1,7 @@
 <div align="center">
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue?logo=python&logoColor=white)
-![LLM](https://img.shields.io/badge/LLM-Vertex_AI_Gemini_2.5-orange?logo=google&logoColor=white)
+![LLM](https://img.shields.io/badge/LLM-Vertex_AI_Gemini_2.0-orange?logo=google&logoColor=white)
 ![ML](https://img.shields.io/badge/ML-HuggingFace-yellow?logo=huggingface&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 

@@ -84,7 +84,8 @@ class LLM_Evaluator(Evaluator):
                 )
                 prompts.append((sys_msg, usr_msg))
 
-            outputs = self.model.generate(prompts=prompts, schema=EvaluationAspect)
+            task_desc = f"[EVAL] Checking {field}"
+            outputs = self.model.generate(prompts=prompts, schema=EvaluationAspect, task_desc=task_desc)
             for response, in_tok, out_tok in outputs:
                 if isinstance(response, (str, bytes, bytearray)):
                     try:
@@ -97,10 +98,10 @@ class LLM_Evaluator(Evaluator):
                 self.input_token_used += in_tok
                 self.output_token_used += out_tok
 
-        # NEW answer-step pipeline 
+        # NEW answer-step pipeline
         raw_answers = [item["answer"] for item in parsed_responses]
-        ans_prompts = self._parse_ans_prompt(raw_answers)               
-        parsed_out = self.model.generate(prompts=ans_prompts)            
+        ans_prompts = self._parse_ans_prompt(raw_answers)
+        parsed_out = self.model.generate(prompts=ans_prompts, task_desc="[EVAL] Parsing final answers")            
         parsed_ans_list, in_tok_seq, out_tok_seq = zip(*parsed_out)      
         self.input_token_used += sum(in_tok_seq)                         
         self.output_token_used += sum(out_tok_seq)                       
