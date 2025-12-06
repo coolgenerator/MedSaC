@@ -67,12 +67,22 @@ reg_evaluator = RegEvaluator()
 
 
 # ------------ Evaluate all methods -------------
-methods = ["stepback"]
+# Priority indices: questions that LLMs often get wrong
+hard_questions = [21, 28, 32, 39, 41, 43, 48, 49, 51, 55, 56, 88]
+
+methods = ["direct", "cot", "stepback"]
 
 for style in methods:
-    method = Plain(style, [gemini], [reg_evaluator, llm_evaluator])
+    method = Plain(
+        style,
+        [gemini],
+        [reg_evaluator, llm_evaluator],
+        priority_indices=hard_questions,  # Always include these
+        random_from_index=200,            # Random samples from row 200 onwards
+        n_random=50                       # Add 50 random samples
+    )
 
-    # Generate raw outputs (set test=False for full dataset)
+    # Generate raw outputs (test=True uses priority_indices + random samples)
     raw = method.generate_raw(test=True)
 
     # Evaluate results

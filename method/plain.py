@@ -145,7 +145,7 @@ class Plain(Method):
     def evaluate(
         self,
         raw_json_file: str,
-        eval_json_dir: str = "eval_output/plain",
+        eval_json_dir: str = "eval_output",
     ) -> str:
         """Read *raw* file, run evaluators, persist extended results."""
         str_raw_json_file = raw_json_file
@@ -207,17 +207,9 @@ class Plain(Method):
                     evaluator.output_token_used / n_rows if n_rows else 0,
                 )
 
-        # 6) persist full evaluation 
+        # 6) persist full evaluation
         Path(eval_json_dir).mkdir(parents=True, exist_ok=True)
-        suffix = "_raw.json"
-        if not str_raw_json_file.endswith(suffix):
-            raise ValueError("input file must end with '_raw.json'")
-        eval_path = str_raw_json_file[:-len(suffix)] + "_eval.json"
-
-        # eval_path = (
-        #     Path(eval_json_dir) /
-        #     f"{safe_model_name}_{self.prompt_style}_eval.json"
-        # )
+        eval_path = Path(eval_json_dir) / f"{safe_model_name}_{self.prompt_style}_eval.json"
         self._dump_json(self.df.to_dict(orient="records"), eval_path)
         logger.info("Evaluation written to %s", eval_path)
 

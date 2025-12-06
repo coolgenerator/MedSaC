@@ -12,12 +12,23 @@ import codecs
 logger = logging.getLogger(__name__)
 
 class Method(abc.ABC):
-    def __init__(self, llms: list[LLM], dataset_path: Optional[str] = None, n_data: Optional[int] = None, row_numbers: Optional[List[int]] = None, calculator_id: Optional[int] = None, batch_size: Optional[int] = 1):
+    def __init__(self, llms: list[LLM], dataset_path: Optional[str] = None, n_data: Optional[int] = None,
+                 row_numbers: Optional[List[int]] = None, calculator_id: Optional[int] = None,
+                 batch_size: Optional[int] = 1, priority_indices: Optional[List[int]] = None,
+                 random_from_index: Optional[int] = None, n_random: int = 0):
         """
         Initialize a Method instance.
-        
+
         Args:
-            llm: List of model names (including company name) to use with this method
+            llms: List of LLM instances to use with this method
+            dataset_path: Path to the dataset
+            n_data: Number of data samples for random sampling
+            row_numbers: Specific row numbers to load
+            calculator_id: Specific calculator ID to filter by
+            batch_size: Batch size for processing
+            priority_indices: List of row indices to prioritize (e.g., hard questions)
+            random_from_index: Start index for random sampling additional questions
+            n_random: Number of random samples to add from random_from_index to end
         """
         self.llm_list = llms
         self.dataset_path = dataset_path
@@ -25,6 +36,9 @@ class Method(abc.ABC):
         self.row_numbers = row_numbers
         self.calculator_id = calculator_id
         self.batch_size = batch_size
+        self.priority_indices = priority_indices
+        self.random_from_index = random_from_index
+        self.n_random = n_random
 
     @staticmethod
     def _parse_json_if_possible(x):
@@ -87,18 +101,24 @@ class Method(abc.ABC):
             logger.error(f"Error loading dataset: {str(e)}")
             raise
 
-    def load_data_test(self, dataset_path: str = './data/test_data.csv', n_data: int = 2, 
-                   row_numbers: Optional[List[int]] = None, 
-                   calculator_id: Optional[int] = None) -> pd.DataFrame:
+    def load_data_test(self, dataset_path: str = './data/test_data.csv', n_data: int = 2,
+                   row_numbers: Optional[List[int]] = None,
+                   calculator_id: Optional[int] = None,
+                   priority_indices: Optional[List[int]] = None,
+                   random_from_index: Optional[int] = None,
+                   n_random: int = 0) -> pd.DataFrame:
         """
         Load test data with specific filtering options.
-        
+
         Args:
             dataset_path: Path to the dataset
             n_data: Number of data samples to load if using calculator_id or for random sampling
             row_numbers: Specific row numbers to load
             calculator_id: Specific calculator ID to filter by
-            
+            priority_indices: List of row indices to prioritize (e.g., hard questions)
+            random_from_index: Start index for random sampling additional questions
+            n_random: Number of random samples to add from random_from_index to end
+
         Returns:
             DataFrame containing the filtered test data
         """
@@ -106,22 +126,39 @@ class Method(abc.ABC):
         n_data = self.n_data or n_data
         row_numbers = self.row_numbers or row_numbers
         calculator_id = self.calculator_id or calculator_id
+        priority_indices = self.priority_indices or priority_indices
+        random_from_index = self.random_from_index or random_from_index
+        n_random = self.n_random or n_random
 
-        # Assert that row_numbers and calculator_id cannot both be provided 
+        # Assert that row_numbers and calculator_id cannot both be provided
         if row_numbers is not None and calculator_id is not None:
             logger.error("row_numbers and calculator_id cannot both be provided.")
             raise ValueError("row_numbers and calculator_id cannot both be provided.")
-        
+
         # Load the full dataset with the specified encoding
         df = pd.read_csv(dataset_path, encoding='utf-8')
         df = df.map(self._parse_json_if_possible)
-        
-        if row_numbers is not None:
+
+        # Priority indices + random sampling mode
+        if priority_indices is not None:
+            selected_indices = list(priority_indices)
+
+            # Add random samples from index n to end if specified
+            if random_from_index is not None and n_random > 0:
+                available_indices = [i for i in range(random_from_index, len(df))
+                                    if i not in priority_indices]
+                n_to_sample = min(n_random, len(available_indices))
+                import random
+                random_indices = random.sample(available_indices, n_to_sample)
+                selected_indices.extend(random_indices)
+
+            return df.iloc[selected_indices]
+        elif row_numbers is not None:
             return df.iloc[row_numbers]
         elif calculator_id is not None:
             return df[df['Calculator ID'] == calculator_id].head(n_data)
         else:
-            # If both are None, sample n_data rows
+            # If all are None, sample n_data rows
             return df.sample(n=n_data)
 
 
