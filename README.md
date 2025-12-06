@@ -7,9 +7,9 @@
 
 # MedSaC
 
-### Medical Score and Calculation Benchmark
+### Medical Stepback and Calculation Benchmark
 
-**Evaluating LLM prompting strategies on clinical calculation tasks from patient notes**
+**Evaluating Step-Back prompting on clinical calculation tasks from patient notes**
 
 ---
 
@@ -187,10 +187,12 @@ This project is based on [MedRaC](https://github.com/Super-Billy/EMNLP-2025-MedR
 If you use this work, please cite the original MedRaC paper:
 
 ```bibtex
-@inproceedings{medsac2025,
+@inproceedings{medrac2025,
   title={MedRaC: Medical Reasoning and Calculation Benchmark},
-  author={...},
+  author={Super-Billy et al.},
   booktitle={EMNLP},
   year={2025}
 }
 ```
+
+*Note: Please check the [original repository](https://github.com/Super-Billy/EMNLP-2025-MedRaC/) for the official citation once the paper is published.*
