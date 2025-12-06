@@ -1,0 +1,38 @@
+# Credentials
+model/vertex-ai-credential.json
+
+# Output directories (generated results)
+raw_output/
+eval_output/
+stats/
+ErrorTypes/
+
+# Cached embeddings for RAG
+data/formula_embeddings_hf/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

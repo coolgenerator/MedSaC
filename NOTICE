@@ -1,0 +1,29 @@
+MedSaC - Medical Score and Calculation Benchmark
+Copyright (c) 2025 Jason
+
+This project includes code and data derived from:
+
+MedRaC (https://github.com/Super-Billy/EMNLP-2025-MedRaC/)
+Copyright (c) 2025 MedRaC Authors
+Licensed under the Apache License, Version 2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+Modifications made to the original MedRaC codebase:
+1. Replaced OpenAI and DeepSeek API integrations with Google Vertex AI (Gemini)
+2. Replaced OpenAI embeddings with HuggingFace sentence-transformers for RAG
+3. Removed methods: SelfRefine, MedPrompt, SelfConsistency, TwoAgent, MedRaC
+4. Added StepBack prompting method
+5. Simplified project structure to focus on Direct, CoT, and StepBack methods
