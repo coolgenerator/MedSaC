@@ -10,8 +10,7 @@ sys.set_int_max_str_digits(0)
 from model import APIModel, vllmModels
 from evaluator import RegEvaluator, LLM_Evaluator
 
-from method.plain    import Plain
-from method.stepBack import StepBack
+from method.plain import Plain
 
 from utils.error_type import error_type_pipeline
 
@@ -54,10 +53,10 @@ eval_json = method.evaluate(raw_json_file=raw)
 reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir_path="stats")
 
 # ------- StepBack Method ------
-# method = StepBack(
-#     llms=[gemini],
-#     evaluators=[reg_evaluator, llm_evaluator],
-#     use_rag=False,  # Set True to use RAG for formula retrieval
+# method = Plain(
+#     "stepback",
+#     [gemini],
+#     [reg_evaluator, llm_evaluator]
 # )
 # raw = method.generate_raw(test=True)
 # eval_json = method.evaluate(raw_json_file=raw)
