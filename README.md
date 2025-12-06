@@ -58,7 +58,7 @@ MedSaC/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/MedSaC.git
+git clone https://github.com/coolgenerator/MedSaC.git
 cd MedSaC
 ```
 
@@ -71,12 +71,6 @@ pip install -r requirements.txt
    - Create a service account in Google Cloud Console
    - Download the JSON key file
    - Save it as `model/vertex-ai-credential.json`
-
-4. (Optional) Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
 
 ## Usage
 
