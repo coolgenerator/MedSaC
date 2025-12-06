@@ -2,7 +2,7 @@
 """
 run.py
 
-A demo file for comparing Direct, CoT, and StepBack methods.
+A demo file for comparing Direct, CoT, and StepBack methods with RAG.
 """
 import sys
 import random
@@ -12,6 +12,7 @@ sys.set_int_max_str_digits(0)
 from model import APIModel, vllmModels
 from evaluator import RegEvaluator, LLM_Evaluator
 from method.plain import Plain
+from method.rag import RAG
 from utils.error_type import error_type_pipeline
 
 
@@ -22,6 +23,7 @@ gemini_gen = APIModel(
     rpm_limit=500,
     tpm_limit=2000000,
     temperature=1.0,
+    disable_thinking=True,  # Disable thinking
 )
 
 # Gemini 2.5 Pro - for evaluations (best reasoning, with thinking enabled)
@@ -29,12 +31,21 @@ gemini_eval = APIModel(
     'VertexAI/gemini-2.5-pro',
     rpm_limit=500,
     tpm_limit=2000000,
-    temperature=0.1,  # Lower temperature for more consistent evaluation
-    disable_thinking=False,  # Enable thinking for better evaluation
+    temperature=0.0,
+    disable_thinking=False,  # Keep thinking enabled for better evaluation
 )
 
 llm_evaluator = LLM_Evaluator(gemini_eval)  # Use 2.5 Pro for LLM evaluation
 reg_evaluator = RegEvaluator()
+
+# Initialize RAG for formula retrieval
+print("Initializing RAG for formula retrieval...")
+rag = RAG(
+    doc_path="data/web_formula.txt",
+    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
+    embeddings_dir="data/formula_embeddings_chroma",
+)
+print(f"RAG initialized with {len(rag)} formula blocks")
 
 # If you want to use open-source models, uncomment and replace gemini with model
 # model = vllmModels(model_name="meta-llama/Llama-3.1-8B-Instruct")
@@ -82,7 +93,7 @@ hard_questions = [21, 28, 32, 39, 41, 43, 48, 49, 51, 55, 56, 88]
 
 # Generate random samples ONCE so all methods use the same data
 
-random.seed(42)  # For reproducibility
+random.seed(60)  # For reproducibility
 df = pd.read_csv('./data/test_data.csv')
 n_random = 50
 random_from_index = 200
@@ -96,7 +107,8 @@ all_test_indices = list(hard_questions) + random_indices
 print(f"Test data: {len(hard_questions)} hard questions + {len(random_indices)} random samples = {len(all_test_indices)} total")
 print(f"Test indices: {all_test_indices}")
 
-methods = ["direct", "cot", "stepback"]
+# RAG-enhanced methods for all three prompting strategies
+methods = [ "cot_rag", "stepback_calc_rag", "medrac_rag", "direct_rag"]
 
 for style in methods:
     print(f"\n{'='*60}")
@@ -107,6 +119,7 @@ for style in methods:
         style,
         [gemini_gen],                     # Use 2.5 Flash for generation
         [reg_evaluator, llm_evaluator],   # LLM evaluator uses 2.5 Pro
+        rag=rag,                          # Pass RAG instance for formula retrieval
         row_numbers=all_test_indices,     # Use the SAME indices for all methods
     )
 

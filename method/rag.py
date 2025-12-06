@@ -1,11 +1,10 @@
 # rag.py
 """
-RAG utility for formula retrieval using HuggingFace embeddings.
+RAG utility for formula retrieval using HuggingFace embeddings with ChromaDB.
 
 Dependencies
 ------------
-pip install langchain langchain-huggingface faiss-cpu sentence-transformers
-# or   pip install faiss-gpu   if you have FAISS with CUDA
+pip install langchain langchain-huggingface chromadb sentence-transformers
 """
 
 from __future__ import annotations
@@ -13,9 +12,9 @@ from __future__ import annotations
 import os
 from typing import List, Tuple
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_chroma import Chroma
 
 
 class RAG:
@@ -25,7 +24,7 @@ class RAG:
         self,
         doc_path: str = "data/web_formula.txt",
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        embeddings_dir: str = "data/formula_embeddings_hf",
+        embeddings_dir: str = "data/formula_embeddings_chroma",
         normalize_embeddings: bool = True,
     ) -> None:
         """
@@ -39,7 +38,7 @@ class RAG:
             Options: 'sentence-transformers/all-MiniLM-L6-v2' (fast, 384 dim)
                      'sentence-transformers/all-mpnet-base-v2' (better quality, 768 dim)
         embeddings_dir : str
-            Directory to cache the FAISS index.
+            Directory to persist the ChromaDB database.
         normalize_embeddings : bool
             Whether to L2-normalize vectors before similarity search (recommended).
         """
@@ -50,12 +49,13 @@ class RAG:
             encode_kwargs={'normalize_embeddings': normalize_embeddings}
         )
 
-        # Try loading a precomputed FAISS index
-        if os.path.isdir(embeddings_dir):
-            self.vectorstore = FAISS.load_local(
-                embeddings_dir,
-                self.embeddings,
-                allow_dangerous_deserialization=True
+        self.embeddings_dir = embeddings_dir
+
+        # Try loading existing ChromaDB
+        if os.path.isdir(embeddings_dir) and os.listdir(embeddings_dir):
+            self.vectorstore = Chroma(
+                persist_directory=embeddings_dir,
+                embedding_function=self.embeddings,
             )
             return
 
@@ -102,14 +102,13 @@ class RAG:
                 "No documents found between <<FORMULA START>> and <<FORMULA END>> markers."
             )
 
-        # 2. Create embeddings & vector store
-        self.vectorstore = FAISS.from_documents(
+        # 2. Create embeddings & vector store with ChromaDB
+        os.makedirs(embeddings_dir, exist_ok=True)
+        self.vectorstore = Chroma.from_documents(
             self.documents,
             self.embeddings,
+            persist_directory=embeddings_dir,
         )
-
-        os.makedirs(embeddings_dir, exist_ok=True)
-        self.vectorstore.save_local(embeddings_dir)
 
     def retrieve(self, query: str, k: int = 1) -> List[Tuple[str, float]]:
         """
@@ -135,7 +134,8 @@ class RAG:
 
     def __len__(self) -> int:
         """Return the number of indexed formula blocks."""
-        return int(self.vectorstore.index.ntotal)
+        # ChromaDB uses _collection.count() instead of index.ntotal
+        return self.vectorstore._collection.count()
 
     @staticmethod
     def trim_before_phrase(text: str) -> str:

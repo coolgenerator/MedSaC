@@ -9,10 +9,20 @@ class KeyValue(BaseModel):
 def prompt_style_to_schema(prompt_style: str) -> BaseModel:
     if prompt_style == 'direct':
         return DirectOutput
+    elif prompt_style == 'direct_rag':
+        return DirectOutput
     elif prompt_style == 'cot':
+        return CoTOutput
+    elif prompt_style == 'cot_rag':
         return CoTOutput
     elif prompt_style == 'stepback':
         return CoTOutput  # Uses same output format as CoT
+    elif prompt_style == 'stepback_rag':
+        return CoTOutput
+    elif prompt_style == 'stepback_calc_rag':
+        return StepBackCalcOutput  # Includes python_code
+    elif prompt_style == 'medrac_rag':
+        return MedRaCOutput  # MedRaC style output
     elif prompt_style == 'oneshot':
         return OneShotOutput
     elif prompt_style == 'modular':
@@ -44,6 +54,30 @@ class ModularCoTOutput(BaseModel):
     extracted_values: List[KeyValue] = Field(..., description="List of extracted variable names and values")
     calculation_steps: str = Field(..., description="Step-by-step breakdown of the calculation")
     answer: str = Field(..., description="Final result of the calculation")
+
+class StepBackCalcOutput(BaseModel):
+    """Output schema for stepback_calc_rag - StepBack + Code execution"""
+    step_by_step_thinking: str = Field(..., description="Step-by-step reasoning including formula verification")
+    extracted_values: dict = Field(..., description="Dictionary of extracted variable names and values")
+    python_code: str = Field(..., description="Python code to compute the result, storing answer in 'result' variable")
+    answer: str = Field(..., description="The computed answer from executing the code")
+
+class MedRaCOutput(BaseModel):
+    """Output schema for medrac_rag - MedRaC style with code execution"""
+    extracted_values: dict = Field(..., description="Dictionary of extracted variable names and values")
+    python_code: str = Field(..., description="Python code to compute the result, storing answer in 'result' variable")
+
+class Values(BaseModel):
+    """Schema for extracted values only (used with RAG where formula is provided)"""
+    extracted_values_reason: str = Field(..., description="Explanation of how values were identified")
+    extracted_values: dict = Field(..., description="Dictionary of variable names to extracted values")
+
+class FormulaAndValues(BaseModel):
+    """Schema for both formula and extracted values (used without RAG)"""
+    formula_reason: str = Field(..., description="Reasoning for choosing this formula")
+    formula: str = Field(..., description="The mathematical formula to apply")
+    extracted_values_reason: str = Field(..., description="Explanation of how values were identified")
+    extracted_values: dict = Field(..., description="Dictionary of variable names to extracted values")
 
 def get_schema(field_name: str) -> BaseModel:
     if field_name == "formula":

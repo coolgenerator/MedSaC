@@ -151,11 +151,12 @@ class APIModel(LLM):
             "max_output_tokens": self.max_tokens,
         }
 
-        # Disable thinking mode for Gemini 2.5 to prevent token exhaustion
+        # Minimize thinking mode for Gemini 2.5 to reduce token usage
+        # Note: thinking_budget=0 is not supported, use minimum value of 1
         if self.disable_thinking and "2.5" in self.model_name:
             config_params["thinking_config"] = types.ThinkingConfig(
                 include_thoughts=False,
-                thinking_budget=0  # Disable thinking
+                thinking_budget=1  # Minimum thinking budget
             )
 
         if schema is not None:
@@ -188,7 +189,8 @@ class APIModel(LLM):
                     if is_rate_limit:
                         print(f"[Req {request_id}] Rate limited (try {attempt}/{max_retries}), waiting {wait_time}s...")
                     else:
-                        print(f"[Req {request_id}] Failed (try {attempt}/{max_retries}): {type(e).__name__}")
+                        # Show full error message for debugging
+                        print(f"[Req {request_id}] Failed (try {attempt}/{max_retries}): {type(e).__name__}: {str(e)[:200]}")
                     await asyncio.sleep(wait_time)
                 else:
                     print(f"[Req {request_id}] Failed (try {attempt}/{max_retries}): {type(e).__name__}: {e}")
@@ -230,30 +232,17 @@ class APIModel(LLM):
         show_progress: bool = True,
         task_desc: Optional[str] = None,
     ) -> List[Tuple[str, int, int]]:
-
-        async def _wrap(idx: int, sys_msg: str, user_msg: str):
-            out = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
-            return idx, out
-
-        tasks = [
-            asyncio.create_task(_wrap(i, sys, usr))
-            for i, (sys, usr) in enumerate(prompts)
-        ]
-
-        if not show_progress:
-            done = await asyncio.gather(*tasks)
-            done.sort(key=lambda x: x[0])
-            return [res for _, res in done]
-
-        results: List[Optional[Tuple[str, int, int]]] = [None] * len(prompts)
+        """Generate responses sequentially (one at a time) to avoid rate limiting."""
+        results: List[Tuple[str, int, int]] = []
         desc = task_desc if task_desc else f"Generating ({self.model_name})"
-        for coro in tqdm(
-            asyncio.as_completed(tasks),
-            total=len(tasks),
-            desc=desc
-        ):
-            idx, res = await coro
-            results[idx] = res
+
+        iterator = enumerate(prompts)
+        if show_progress:
+            iterator = tqdm(list(iterator), desc=desc)
+
+        for idx, (sys_msg, user_msg) in iterator:
+            result = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
+            results.append(result)
 
         return results
 

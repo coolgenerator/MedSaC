@@ -8,12 +8,17 @@ tqdm==4.67.1
 # Vertex AI / Gemini (new unified SDK)
 google-genai>=1.0.0
 
-# RAG dependencies (local HuggingFace embeddings, no API key needed)
+# RAG dependencies (local HuggingFace embeddings + ChromaDB)
 langchain>=0.3.0
 langchain_community>=0.3.0
 langchain_huggingface>=0.1.0
+langchain-chroma>=0.2.0
+chromadb>=0.4.0
 sentence-transformers>=2.2.0
-faiss-cpu>=1.7.4  # use faiss-gpu if you have CUDA
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
 
 # Optional: for open-source models via vLLM
 # vllm==0.8.3

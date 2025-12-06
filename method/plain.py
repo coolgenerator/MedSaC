@@ -5,13 +5,51 @@ from model.model import LLM
 from schema.schemas import prompt_style_to_schema
 
 import os
+import re
 import json
 import logging
+import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd  # new dependency for convenient table handling
 
 logger = logging.getLogger(__name__)
+
+
+def execute_code(code: str) -> str:
+    """
+    Execute Python code in a sandboxed environment and return the result.
+    The code should store its answer in a variable called `result`.
+    """
+    # Strip markdown code fences if present
+    code_str = code.strip()
+    if code_str.startswith("```"):
+        code_str = re.sub(r"^```[^\n]*\n", "", code_str)
+        code_str = re.sub(r"```$", "", code_str)
+
+    # Create a safe execution environment
+    safe_globals = {
+        "math": math,
+        "np": np,
+        "numpy": np,
+        "__builtins__": {
+            "abs": abs, "round": round, "min": min, "max": max,
+            "sum": sum, "len": len, "float": float, "int": int,
+            "str": str, "bool": bool, "list": list, "dict": dict,
+            "range": range, "pow": pow,
+        }
+    }
+    local_vars = {}
+
+    try:
+        exec(code_str, safe_globals, local_vars)
+        result = local_vars.get("result", None)
+        if result is not None:
+            return str(result)
+        return "No result variable found"
+    except Exception as e:
+        return f"Execution error: {e}"
 
 
 class Plain(Method):
@@ -33,8 +71,10 @@ class Plain(Method):
         prompt_style: str,
         llms: List[LLM],
         evaluators: List[Evaluator],
+        rag=None,  # Optional RAG instance for RAG-enhanced methods
         **kwargs,
     ) -> None:
+        # Methods that don't require RAG
         valid_prompt_styles = {
             "direct": self.direct,
             "cot": self.cot,
@@ -43,12 +83,33 @@ class Plain(Method):
             "modular": self.modular,
             "modular_cot": self.modular_cot,
         }
-        if prompt_style not in valid_prompt_styles:
+        # Methods that require RAG
+        rag_prompt_styles = {
+            "direct_rag": self.direct_rag,
+            "cot_rag": self.cot_rag,
+            "stepback_rag": self.stepback_rag,
+            "stepback_calc_rag": self.stepback_calc_rag,  # StepBack + Code execution
+            "medrac_rag": self.medrac_rag,  # MedRaC style with RAG
+        }
+
+        all_styles = {**valid_prompt_styles, **rag_prompt_styles}
+
+        if prompt_style not in all_styles:
             raise ValueError(f"Prompt style: {prompt_style} not supported.")
 
+        # Check if RAG is required but not provided
+        if prompt_style in rag_prompt_styles and rag is None:
+            raise ValueError(f"Prompt style '{prompt_style}' requires a RAG instance.")
+
         self.prompt_style = prompt_style
-        self.prompt_fn = valid_prompt_styles[prompt_style]
+        self.prompt_fn = all_styles[prompt_style]
         self.evaluators = evaluators
+        self.rag = rag
+        self.uses_rag = prompt_style in rag_prompt_styles
+
+        # Methods that generate code to be executed
+        code_execution_styles = {"stepback_calc_rag", "medrac_rag"}
+        self.uses_code_execution = prompt_style in code_execution_styles
 
         # Store latest run artefacts (optional, mainly for  backward compatibility)
         self.responses: Dict[str, List[str]] = {}
@@ -88,7 +149,11 @@ class Plain(Method):
         questions = self.df["Question"].tolist()
         calids = self.df["Calculator ID"].astype(str).tolist()
 
-        prompts = self.prompt_fn(calids, notes, questions)
+        # Call prompt function with RAG if needed
+        if self.uses_rag:
+            prompts = self.prompt_fn(calids, notes, questions, self.rag)
+        else:
+            prompts = self.prompt_fn(calids, notes, questions)
 
         os.makedirs(raw_json_dir, exist_ok=True)
         prompt_list = [
@@ -116,6 +181,35 @@ class Plain(Method):
                 self.input_tokens[model_name],
                 self.output_tokens[model_name],
             ) = map(list, zip(*generations))
+
+            # Execute code for MedRaC-style methods
+            if self.uses_code_execution:
+                logger.info("Executing generated code for %d responses...", len(self.responses[model_name]))
+                executed_responses = []
+                for resp in self.responses[model_name]:
+                    if isinstance(resp, dict):
+                        code = resp.get("python_code", "")
+                        computed_answer = execute_code(code)
+                        # Update response with computed answer
+                        resp["computed_answer"] = computed_answer
+                        resp["answer"] = computed_answer
+                        executed_responses.append(resp)
+                    elif isinstance(resp, str):
+                        try:
+                            resp_dict = json.loads(resp)
+                            code = resp_dict.get("python_code", "")
+                            computed_answer = execute_code(code)
+                            resp_dict["computed_answer"] = computed_answer
+                            resp_dict["answer"] = computed_answer
+                            executed_responses.append(resp_dict)
+                        except json.JSONDecodeError:
+                            # If not JSON, try to execute as code directly
+                            computed_answer = execute_code(resp)
+                            executed_responses.append({"answer": computed_answer, "raw": resp})
+                    else:
+                        executed_responses.append(resp)
+                self.responses[model_name] = executed_responses
+                logger.info("Code execution complete")
 
             raw_records = self._build_records(
                 model_name=model_name,

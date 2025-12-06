@@ -294,7 +294,252 @@ class Method(abc.ABC):
             )
             prompts.append((system_msg, user_msg))
 
-        return prompts 
+        return prompts
+
+    # ==================== RAG-Enhanced Methods ====================
+
+    @staticmethod
+    def direct_rag(calids: List[str], notes: List[str], questions: List[str], rag) -> List[Tuple[str, str]]:
+        """
+        Create direct answer prompts with RAG-retrieved formula information.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+            rag: RAG instance for formula retrieval.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            # Retrieve relevant formula
+            retrieved = rag.retrieve(question, k=1)
+            formula_info = retrieved[0][0] if retrieved else ""
+
+            system_msg = (
+                "You are a precise medical calculation assistant. "
+                "Convert units as needed (creatinine: µmol/L ÷ 88.4 = mg/dL; height: cm ÷ 2.54 = inches; weight: lbs ÷ 2.205 = kg). "
+                "Apply ALL formula coefficients including sex/race modifiers. "
+                "Your output should only contain a JSON dict formatted as "
+                '{"answer": str(value which is the answer to the question)}.'
+            )
+            user_msg = (
+                f"Here is the relevant medical formula information:\n{formula_info}\n\n"
+                f"Here is the patient note:\n{note}\n\n"
+                f"Here is the task:\n{question}\n\n"
+                "Extract values, convert units if needed, apply the formula with ALL modifiers, "
+                'and output the answer formatted as "answer": str(numerical_value):'
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts
+
+    @staticmethod
+    def cot_rag(calids: List[int], notes: List[str], questions: List[str], rag) -> List[Tuple[str, str]]:
+        """
+        Create chain-of-thought prompts with RAG-retrieved formula information.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+            rag: RAG instance for formula retrieval.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            # Retrieve relevant formula
+            retrieved = rag.retrieve(question, k=1)
+            formula_info = retrieved[0][0] if retrieved else ""
+
+            system_msg = (
+                "You are a precise medical calculation assistant. "
+                "You must follow the provided formula EXACTLY, including all coefficients and modifiers. "
+                "Show all intermediate calculations with full precision (do not round until the final answer). "
+                "Your output should only contain a JSON dict formatted as "
+                '{"step_by_step_thinking": str(your_step_by_step_thinking_procress_to_solve_the_question), '
+                '"answer": str(short_and_direct_answer_of_the_question)}.'
+            )
+            user_msg = (
+                f"Here is the EXACT medical formula you must use:\n{formula_info}\n\n"
+                f"Here is the patient note:\n{note}\n\n"
+                f"Here is the task:\n{question}\n\n"
+                "IMPORTANT: Follow these steps precisely:\n"
+                "1. Identify ALL variables and coefficients from the formula (including sex/race modifiers)\n"
+                "2. Extract the exact values from the patient note (with correct units)\n"
+                "3. CRITICAL - Convert units to match the formula requirements:\n"
+                "   - Creatinine: µmol/L ÷ 88.4 = mg/dL\n"
+                "   - Height: cm ÷ 2.54 = inches; feet/inches to cm\n"
+                "   - Weight: lbs ÷ 2.205 = kg\n"
+                "   - BUN: mmol/L × 2.8 = mg/dL\n"
+                "4. Substitute values into the formula and show the calculation\n"
+                "5. Apply ALL modifiers (sex, race, age adjustments) as specified in the formula\n"
+                "6. Round only at the final step to appropriate precision\n\n"
+                'Output your step-by-step calculation and the final answer:'
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts
+
+    @staticmethod
+    def stepback_rag(calids: List[int], notes: List[str], questions: List[str], rag) -> List[Tuple[str, str]]:
+        """
+        Create step-back prompts with RAG-retrieved formula information.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+            rag: RAG instance for formula retrieval.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            # Retrieve relevant formula
+            retrieved = rag.retrieve(question, k=1)
+            formula_info = retrieved[0][0] if retrieved else ""
+
+            system_msg = (
+                "You are a precise medical calculation assistant. "
+                "You must follow the provided formula EXACTLY, including all coefficients and modifiers. "
+                "First verify the formula applies to this case, then calculate with full precision. "
+                "Your output should only contain a JSON dict formatted as "
+                '{"step_by_step_thinking": str(your_step_by_step_thinking_procress_to_solve_the_question), '
+                '"answer": str(short_and_direct_answer_of_the_question)}.'
+            )
+            user_msg = (
+                f"Here is the EXACT medical formula you must use:\n{formula_info}\n\n"
+                f"Here is the patient note:\n{note}\n\n"
+                f"Here is the task:\n{question}\n\n"
+                "STEP-BACK APPROACH - Follow these steps:\n"
+                "1. VERIFY: Confirm this formula is appropriate for the task\n"
+                "2. LIST all variables and coefficients from the formula (including sex/race/age modifiers)\n"
+                "3. EXTRACT exact values from the patient note with correct units\n"
+                "4. CONVERT units to match formula requirements:\n"
+                "   - Creatinine: µmol/L ÷ 88.4 = mg/dL\n"
+                "   - Height: cm ÷ 2.54 = inches; feet/inches to cm\n"
+                "   - Weight: lbs ÷ 2.205 = kg\n"
+                "   - BUN: mmol/L × 2.8 = mg/dL\n"
+                "5. CALCULATE by substituting values into the formula (show full arithmetic)\n"
+                "6. APPLY all modifiers as specified in the formula\n"
+                "7. VERIFY your calculation is correct before giving the final answer\n"
+                "8. ROUND only at the final step to appropriate precision\n\n"
+                'Output your step-by-step verification and calculation:'
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts
+
+    @staticmethod
+    def stepback_calc_rag(calids: List[int], notes: List[str], questions: List[str], rag) -> List[Tuple[str, str]]:
+        """
+        Create step-back prompts with RAG + code generation (MedRaC-style).
+        Instead of having the LLM do arithmetic, it generates Python code to compute the result.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+            rag: RAG instance for formula retrieval.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            # Retrieve relevant formula
+            retrieved = rag.retrieve(question, k=1)
+            formula_info = retrieved[0][0] if retrieved else ""
+
+            system_msg = (
+                "You are a precise medical calculation assistant. "
+                "You will extract values from the patient note, then write Python code to compute the result. "
+                "This avoids arithmetic errors. Your output should be a JSON dict with:\n"
+                '{"step_by_step_thinking": str, "extracted_values": dict, "python_code": str, "answer": str}\n\n'
+                "The python_code should:\n"
+                "- Define all extracted variables\n"
+                "- Perform unit conversions if needed\n"
+                "- Apply the formula with all coefficients\n"
+                "- Store the final answer in a variable called `result`\n"
+                "- Use only: math, numpy (as np)\n"
+            )
+            user_msg = (
+                f"Here is the EXACT medical formula you must use:\n{formula_info}\n\n"
+                f"Here is the patient note:\n{note}\n\n"
+                f"Here is the task:\n{question}\n\n"
+                "STEP-BACK + CALCULATE approach:\n"
+                "1. VERIFY: Confirm this formula is appropriate for the task\n"
+                "2. LIST all variables and coefficients from the formula\n"
+                "3. EXTRACT exact values from the patient note (with units)\n"
+                "4. Write Python code that:\n"
+                "   - Defines variables with extracted values\n"
+                "   - Converts units if needed (µmol/L ÷ 88.4 = mg/dL, etc.)\n"
+                "   - Applies the formula with ALL modifiers\n"
+                "   - Stores result in `result` variable\n"
+                "5. State the final answer\n\n"
+                "Output JSON with step_by_step_thinking, extracted_values, python_code, and answer:"
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts
+
+    @staticmethod
+    def medrac_rag(calids: List[int], notes: List[str], questions: List[str], rag) -> List[Tuple[str, str]]:
+        """
+        MedRaC-style prompts: Extract values, generate executable Python code.
+        The code will be executed to get the final answer, avoiding LLM arithmetic errors.
+
+        Args:
+            calids: List of IDs of the specific calculators.
+            notes: List of patient note texts.
+            questions: List of calculation questions.
+            rag: RAG instance for formula retrieval.
+
+        Returns:
+            List of tuples, where each tuple is (system_message, user_message).
+        """
+        prompts = []
+
+        for calid, note, question in zip(calids, notes, questions):
+            # Retrieve relevant formula
+            retrieved = rag.retrieve(question, k=1)
+            formula_info = retrieved[0][0] if retrieved else ""
+
+            system_msg = (
+                "You are a clinical calculator that extracts values and writes Python code. "
+                "Your output should be a JSON dict:\n"
+                '{"extracted_values": dict, "python_code": str}\n\n'
+                "Rules for python_code:\n"
+                "1. Use ONLY: math, numpy (import as np)\n"
+                "2. Define all variables from extracted_values\n"
+                "3. Perform unit conversions:\n"
+                "   - Creatinine: µmol/L ÷ 88.4 = mg/dL\n"
+                "   - Height: cm ÷ 2.54 = inches\n"
+                "   - Weight: lbs ÷ 2.205 = kg\n"
+                "4. Apply the formula exactly as given\n"
+                "5. Store final answer in variable named `result`\n"
+                "6. Do NOT use print() or input()\n"
+            )
+            user_msg = (
+                f"### Formula\n{formula_info}\n\n"
+                f"### Patient Note\n{note}\n\n"
+                f"### Question\n{question}\n\n"
+                "Extract the required values and write Python code to compute the answer. "
+                "The code will be executed, so ensure it is correct and complete."
+            )
+            prompts.append((system_msg, user_msg))
+
+        return prompts
 
     @staticmethod
     def one_shot(calids: List[str], notes: List[str], questions: List[str]) -> List[Tuple[str, str]]:
