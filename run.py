@@ -43,14 +43,14 @@ reg_evaluator = RegEvaluator()
 # reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir_path="stats")
 
 # ------- CoT (Chain-of-Thought) Method ------
-method = Plain(
-    "cot",
-    [gemini],
-    [reg_evaluator, llm_evaluator]
-)
-raw = method.generate_raw(test=True)
-eval_json = method.evaluate(raw_json_file=raw)
-reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir_path="stats")
+# method = Plain(
+#     "cot",
+#     [gemini],
+#     [reg_evaluator, llm_evaluator]
+# )
+# raw = method.generate_raw(test=True)
+# eval_json = method.evaluate(raw_json_file=raw)
+# reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir_path="stats")
 
 # ------- StepBack Method ------
 # method = Plain(
@@ -62,6 +62,31 @@ reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir
 # eval_json = method.evaluate(raw_json_file=raw)
 # reg_evaluator.compute_overall_accuracy_new(input_file_path=eval_json, output_dir_path="stats")
 
-
 # ------------ Error Type Analysis -------------
-error_type_pipeline(input_json=eval_json, output_json_dir="ErrorTypes", model_name='VertexAI/gemini-2.5-flash')
+# error_type_pipeline(input_json=eval_json, output_json_dir="ErrorTypes", model_name='VertexAI/gemini-2.5-flash')
+
+
+# ------------ Evaluate all methods -------------
+methods = ["stepback"]
+
+for style in methods:
+    method = Plain(style, [gemini], [reg_evaluator, llm_evaluator])
+
+    # Generate raw outputs (set test=False for full dataset)
+    raw = method.generate_raw(test=True)
+
+    # Evaluate results
+    eval_json = method.evaluate(raw_json_file=raw)
+
+    # Compute accuracy statistics
+    reg_evaluator.compute_overall_accuracy_new(
+        input_file_path=eval_json,
+        output_dir_path="stats"
+    )
+
+    # Error type analysis
+    error_type_pipeline(
+        input_json=eval_json,
+        output_json_dir="ErrorTypes",
+        model_name='VertexAI/gemini-2.5-flash'
+    )

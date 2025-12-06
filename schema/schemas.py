@@ -11,6 +11,8 @@ def prompt_style_to_schema(prompt_style: str) -> BaseModel:
         return DirectOutput
     elif prompt_style == 'cot':
         return CoTOutput
+    elif prompt_style == 'stepback':
+        return CoTOutput  # Uses same output format as CoT
     elif prompt_style == 'oneshot':
         return OneShotOutput
     elif prompt_style == 'modular':
@@ -81,25 +83,3 @@ class FinalansEvaluation(BaseModel):
     class Config:
         extra = "forbid"
 
-class SelfRefineFB(BaseModel):
-    reasoning: str = Field(..., description='Your detailed reasoning')
-    has_errors: str = Field( ...,description="Must be True if any mistake is found, otherwise False", json_schema_extra={"enum":["True", "False"]})
-    class Config:
-        extra = "forbid"
-
-class FormulaAndValues(BaseModel):
-    formula_reason: str = Field(..., description="Reasoning behind choosing the formula")
-    formula: str = Field(..., description="The explicit formula used for calculation")
-    extracted_values_reason: str = Field(..., description="Explanation of how each value was identified")
-    extracted_values: List[KeyValue] = Field(..., description="List of extracted variable names and values")
-
-class Values(BaseModel):
-    extracted_values_reason: str = Field(..., description="Explanation of how each value was identified")
-    extracted_values: List[KeyValue] = Field(..., description="List of extracted variable names and values")
-    
-
-class CalcAnswer(BaseModel):
-    calculation: str = Field(..., description="Steps taken to compute the result.")
-    answer: str = Field(..., description="The final result in simplest form.")
-    class Config:
-        extra = "forbid"

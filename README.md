@@ -41,8 +41,9 @@ MedSaC/
 │   ├── formula_new.json     # Medical formulas by Calculator ID
 │   └── web_formula.txt      # Formula knowledge base for RAG
 ├── method/                  # Prompting methods
-│   ├── plain.py             # Direct and CoT prompting
-│   └── stepBack.py          # Step-Back prompting
+│   ├── method.py            # Base class with prompt templates
+│   ├── plain.py             # Plain wrapper (direct, cot, stepback)
+│   └── rag.py               # RAG utility for formula retrieval
 ├── model/                   # LLM integrations
 │   └── vertexai.py          # Vertex AI / Gemini client
 ├── evaluator/               # Evaluation modules
@@ -104,10 +105,10 @@ method = Plain(
 
 **Step-Back Prompting**
 ```python
-method = StepBack(
-    llms=[gemini],
-    evaluators=[reg_evaluator, llm_evaluator],
-    use_rag=False,  # Set True to enable RAG
+method = Plain(
+    "stepback",
+    [gemini],
+    [reg_evaluator, llm_evaluator]
 )
 ```
 
