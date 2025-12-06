@@ -38,6 +38,7 @@ class Plain(Method):
         valid_prompt_styles = {
             "direct": self.direct,
             "cot": self.cot,
+            "stepback": self.stepback,
             "oneshot": self.one_shot,
             "modular": self.modular,
             "modular_cot": self.modular_cot,
