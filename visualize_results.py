@@ -801,6 +801,13 @@ def main():
         print("No stats files found in 'stats/' directory")
         return
 
+    # Filter to only compare direct, cot, and stepback methods (with and without RAG)
+    METHODS_TO_COMPARE = ["direct", "cot", "stepback"]
+    stats = {k: v for k, v in stats.items() if k in METHODS_TO_COMPARE}
+    evals = {k: v for k, v in evals.items() if k in METHODS_TO_COMPARE}
+    errors = {k: v for k, v in errors.items() if k in METHODS_TO_COMPARE}
+
+    print(f"Comparing methods: {METHODS_TO_COMPARE}")
     print(f"Found {len(stats)} methods in stats: {list(stats.keys())}")
     print(f"Found {len(evals)} methods in eval_output: {list(evals.keys())}")
     print(f"Found {len(errors)} methods in ErrorTypes: {list(errors.keys())}")
@@ -816,8 +823,6 @@ def main():
 
     if evals:
         plot_detailed_eval_results(evals, output_dir)
-        # Error counts (like Table 4 in paper) - uses 8 types if ErrorTypes available
-        plot_llm_eval_error_counts(evals, errors, output_dir)
 
     # Error type analysis from ErrorTypes folder (8 detailed error types)
     if errors:

@@ -110,7 +110,7 @@ print(f"Test data: {len(hard_questions)} hard questions + {len(random_indices)} 
 print(f"Test indices: {all_test_indices}")
 
 # RAG-enhanced methods for all three prompting strategies
-methods = ["medrac_rag", "stepback_calc_rag", "stepback_rag", "direct_rag", "cot_rag"]
+methods = ["direct", "cot", "stepback"]
 
 for style in methods:
     print(f"\n{'='*60}")

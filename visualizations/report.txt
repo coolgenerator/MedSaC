@@ -1,0 +1,60 @@
+================================================================================
+MedSaC Evaluation Report
+================================================================================
+
+Method: DIRECT
+----------------------------------------
+  Total Questions: 62
+  Regex Accuracy: 25.81%
+  LLM Accuracy: 1.61%
+  Avg Input Tokens: 728
+  Avg Output Tokens: 10
+
+  Error Type Breakdown:
+    - Formula Error: 53 (85.5%)
+    - Missing Variables: 33 (53.2%)
+    - Missing or Misused Demographic/Adjustment Coefficients: 4 (6.5%)
+    - Unit Conversion Error: 3 (4.8%)
+    - Arithmetic Errors: 0 (0.0%)
+    - Rounding / Precision Errors: 18 (29.0%)
+    - Incorrect Variable Extraction: 15 (24.2%)
+    - Clinical Misinterpretation (Rule-based Only): 27 (43.5%)
+
+
+Method: COT
+----------------------------------------
+  Total Questions: 62
+  Regex Accuracy: 61.29%
+  LLM Accuracy: 50.00%
+  Avg Input Tokens: 801
+  Avg Output Tokens: 549
+
+  Error Type Breakdown:
+    - Formula Error: 19 (30.6%)
+    - Missing Variables: 5 (8.1%)
+    - Missing or Misused Demographic/Adjustment Coefficients: 2 (3.2%)
+    - Unit Conversion Error: 1 (1.6%)
+    - Arithmetic Errors: 4 (6.5%)
+    - Rounding / Precision Errors: 3 (4.8%)
+    - Incorrect Variable Extraction: 7 (11.3%)
+    - Clinical Misinterpretation (Rule-based Only): 11 (17.7%)
+
+
+Method: STEPBACK
+----------------------------------------
+  Total Questions: 62
+  Regex Accuracy: 67.74%
+  LLM Accuracy: 58.06%
+  Avg Input Tokens: 885
+  Avg Output Tokens: 725
+
+  Error Type Breakdown:
+    - Formula Error: 17 (27.4%)
+    - Missing Variables: 4 (6.5%)
+    - Missing or Misused Demographic/Adjustment Coefficients: 2 (3.2%)
+    - Unit Conversion Error: 1 (1.6%)
+    - Arithmetic Errors: 3 (4.8%)
+    - Rounding / Precision Errors: 2 (3.2%)
+    - Incorrect Variable Extraction: 2 (3.2%)
+    - Clinical Misinterpretation (Rule-based Only): 16 (25.8%)
+

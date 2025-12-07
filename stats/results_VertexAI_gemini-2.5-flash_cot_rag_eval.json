@@ -1,0 +1,202 @@
+{
+    "date": {
+        "regular expression evaluation": {
+            "average": 85.71,
+            "std": 0.13,
+            "count": 7
+        },
+        "llm evaluation": {
+            "raw_average": 85.71,
+            "average": 85.71,
+            "std": 0.13,
+            "count": 7,
+            "formula error": 100.0,
+            "extracted_values error": 0.0,
+            "calculation error": 0.0,
+            "answer error": 0.0,
+            "formula error conditional": 14.29,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 0.0
+        }
+    },
+    "diagnosis": {
+        "regular expression evaluation": {
+            "average": 100.0,
+            "std": 0.0,
+            "count": 2
+        },
+        "llm evaluation": {
+            "raw_average": 100.0,
+            "average": 100.0,
+            "std": 0.0,
+            "count": 2,
+            "formula error conditional": 0.0,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 0.0
+        }
+    },
+    "dosage conversion": {
+        "regular expression evaluation": {
+            "average": 0.0,
+            "std": 0.0,
+            "count": 1
+        },
+        "llm evaluation": {
+            "raw_average": 0.0,
+            "average": 0.0,
+            "std": 0.0,
+            "count": 1,
+            "formula error": 100.0,
+            "extracted_values error": 0.0,
+            "calculation error": 0.0,
+            "answer error": 0.0,
+            "formula error conditional": 100.0,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 0.0
+        }
+    },
+    "lab test": {
+        "regular expression evaluation": {
+            "average": 57.89,
+            "std": 0.11,
+            "count": 19
+        },
+        "llm evaluation": {
+            "raw_average": 78.95,
+            "average": 73.68,
+            "std": 0.1,
+            "count": 19,
+            "formula error": 40.0,
+            "extracted_values error": 0.0,
+            "calculation error": 40.0,
+            "answer error": 20.0,
+            "formula error conditional": 10.53,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 11.76,
+            "answer error conditional": 6.67
+        }
+    },
+    "physical": {
+        "regular expression evaluation": {
+            "average": 100.0,
+            "std": 0.0,
+            "count": 6
+        },
+        "llm evaluation": {
+            "raw_average": 100.0,
+            "average": 100.0,
+            "std": 0.0,
+            "count": 6,
+            "formula error conditional": 0.0,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 0.0
+        }
+    },
+    "risk": {
+        "regular expression evaluation": {
+            "average": 63.64,
+            "std": 0.1,
+            "count": 22
+        },
+        "llm evaluation": {
+            "raw_average": 63.64,
+            "average": 59.09,
+            "std": 0.1,
+            "count": 22,
+            "formula error": 22.22,
+            "extracted_values error": 66.67,
+            "calculation error": 0.0,
+            "answer error": 11.11,
+            "formula error conditional": 9.09,
+            "extracted_values error conditional": 30.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 7.14
+        }
+    },
+    "severity": {
+        "regular expression evaluation": {
+            "average": 80.0,
+            "std": 0.18,
+            "count": 5
+        },
+        "llm evaluation": {
+            "raw_average": 100.0,
+            "average": 100.0,
+            "std": 0.0,
+            "count": 5,
+            "formula error conditional": 0.0,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 0.0
+        }
+    },
+    "equation-based question": {
+        "regular expression evaluation": {
+            "average": 69.7,
+            "std": 0.08,
+            "count": 33
+        },
+        "llm evaluation": {
+            "raw_average": 81.82,
+            "average": 78.79,
+            "std": 0.07,
+            "count": 33,
+            "formula error": 57.14,
+            "extracted_values error": 0.0,
+            "calculation error": 28.57,
+            "answer error": 14.29,
+            "formula error conditional": 12.12,
+            "extracted_values error conditional": 0.0,
+            "calculation error conditional": 6.9,
+            "answer error conditional": 3.7
+        }
+    },
+    "rule-based question": {
+        "regular expression evaluation": {
+            "average": 68.97,
+            "std": 0.09,
+            "count": 29
+        },
+        "llm evaluation": {
+            "raw_average": 72.41,
+            "average": 68.97,
+            "std": 0.09,
+            "count": 29,
+            "formula error": 22.22,
+            "extracted_values error": 66.67,
+            "calculation error": 0.0,
+            "answer error": 11.11,
+            "formula error conditional": 6.9,
+            "extracted_values error conditional": 22.22,
+            "calculation error conditional": 0.0,
+            "answer error conditional": 4.76
+        }
+    },
+    "overall": {
+        "regular expression evaluation": {
+            "average": 69.35,
+            "std": 0.06,
+            "count": 62
+        },
+        "llm evaluation": {
+            "raw_average": 77.42,
+            "average": 74.19,
+            "std": 0.06,
+            "count": 62,
+            "formula error": 37.5,
+            "extracted_values error": 37.5,
+            "calculation error": 12.5,
+            "answer error": 12.5,
+            "formula error conditional": 9.68,
+            "extracted_values error conditional": 10.71,
+            "calculation error conditional": 4.0,
+            "answer error conditional": 4.17
+        }
+    },
+    "input_tokens_average": 1150,
+    "output_tokens_average": 757
+}

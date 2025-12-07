@@ -1,13 +1,6 @@
 # Credentials
 model/vertex-ai-credential.json
 
-# Output directories (generated results)
-raw_output/
-eval_output/
-stats/
-ErrorTypes/
-visualizations/
-
 # Cached embeddings for RAG
 data/formula_embeddings_hf/
 data/formula_embeddings_chroma/
