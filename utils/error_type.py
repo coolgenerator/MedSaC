@@ -153,7 +153,16 @@ def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str =
 
     df = pd.DataFrame(json.load(raw_json_file.open()))
 
-    # bookkeeping
+    # bookkeeping - extract method name from input filename
+    # e.g., VertexAI_gemini-2.5-flash_cot_rag_eval.json -> cot_rag
+    input_filename = raw_json_file.stem  # without extension
+    parts = input_filename.split("_")
+    if "eval" in parts:
+        eval_idx = parts.index("eval")
+        method_name = "_".join(parts[2:eval_idx])  # e.g., cot_rag
+    else:
+        method_name = "unknown"
+
     model_name = df["Model Name"].iloc[0]
     safe_model_name = model_name.replace("/", "_")
 
@@ -265,15 +274,7 @@ def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str =
     _add("round",   prompts_round)
 
     # ---------- single generate ----------------------------------------
-    print(f"\n[ERROR ANALYSIS] Processing {len(all_prompts)} prompts across 8 error types...")
-    print(f"  - Formula errors: {slices['formula'][1] - slices['formula'][0]}")
-    print(f"  - Variable extraction: {slices['var'][1] - slices['var'][0]}")
-    print(f"  - Clinical misinterpretation: {slices['cmis'][1] - slices['cmis'][0]}")
-    print(f"  - Missing variables: {slices['miss'][1] - slices['miss'][0]}")
-    print(f"  - Unit conversion: {slices['unit'][1] - slices['unit'][0]}")
-    print(f"  - Adjustment coefficients: {slices['adj'][1] - slices['adj'][0]}")
-    print(f"  - Arithmetic errors: {slices['arith'][1] - slices['arith'][0]}")
-    print(f"  - Rounding errors: {slices['round'][1] - slices['round'][0]}")
+    print(f"\n[ERROR ANALYSIS] Analyzing {len(df)} samples across 8 error types ({len(all_prompts)} total prompts)...")
 
     all_results = _parse_replies(gemini.generate(
         prompts=all_prompts,
@@ -333,15 +334,48 @@ def error_type_pipeline(input_json: str, output_json_dir: str, model_name: str =
         df[err_col] = errs
         df[exp_col] = exps
 
+    # ---------- print summary of actual errors found ----------------------
+    def _count_errors(results: List[Dict[str, Any]]) -> int:
+        return sum(1 for r in results if r.get("error_present") == "Yes")
+
+    print(f"\n[ERROR ANALYSIS] Results Summary:")
+    print(f"  {'Error Type':<45} {'Errors':<8} {'Checked':<8} {'Rate':<8}")
+    print(f"  {'-'*70}")
+
+    error_summary = [
+        ("Formula Error", formula_res),
+        ("Incorrect Variable Extraction", var_res),
+        ("Clinical Misinterpretation", cmis_res),
+        ("Missing Variables", miss_res),
+        ("Unit Conversion Error", unit_res),
+        ("Demographic/Adjustment Coefficients", adj_res),
+        ("Arithmetic Errors", arith_res),
+        ("Rounding / Precision Errors", round_res),
+    ]
+
+    total_errors = 0
+    total_checked = 0
+    for name, results in error_summary:
+        errors = _count_errors(results)
+        checked = len(results)
+        rate = (errors / checked * 100) if checked > 0 else 0
+        total_errors += errors
+        total_checked += checked
+        print(f"  {name:<45} {errors:<8} {checked:<8} {rate:.1f}%")
+
+    print(f"  {'-'*70}")
+    print(f"  {'TOTAL':<45} {total_errors:<8} {total_checked:<8}")
+
     # ---------- save ----------------------------------------------------
     out_dir  = Path(output_json_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"{safe_model_name}_error_eval.json"
+    # Include method name in output filename
+    out_file = out_dir / f"{safe_model_name}_{method_name}_error_eval.json"
     out_file.write_text(
         json.dumps(df.to_dict(orient="records"), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"[+] Finished – results written to: {out_file.resolve()}")
+    print(f"\n[+] Finished – results written to: {out_file.resolve()}")
 
 
 

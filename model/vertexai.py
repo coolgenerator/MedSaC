@@ -27,6 +27,7 @@ class APIModel(LLM):
         rpm_limit: Optional[int] = None,
         tpm_limit: Optional[int] = None,
         disable_thinking: bool = True,
+        max_concurrency: Optional[int] = None,
     ):
         """
         Args:
@@ -35,7 +36,9 @@ class APIModel(LLM):
             rpm_limit: max requests per rolling 60-second window
             tpm_limit: max tokens (in+out) per rolling 60-second window
             disable_thinking: If True, disable thinking mode for 2.5 models (default: True)
+            max_concurrency: Max concurrent requests. None=sequential, 10-20=recommended parallel
         """
+        self.max_concurrency = max_concurrency
         super().__init__(model_name=model_name, temperature=temperature)
 
         self.disable_thinking = disable_thinking
@@ -92,7 +95,12 @@ class APIModel(LLM):
         )
 
         if self.disable_thinking and "2.5" in self.model_name:
-            print(f"  Thinking mode: DISABLED (thinking_budget=0)")
+            print(f"  Thinking mode: DISABLED (thinking_budget=1)")
+
+        if self.max_concurrency is not None:
+            print(f"  Concurrency: PARALLEL (max {self.max_concurrency} concurrent requests)")
+        else:
+            print(f"  Concurrency: SEQUENTIAL")
 
     async def _throttle(self, tokens_est: int):
         async with self._throttle_lock:
@@ -198,8 +206,12 @@ class APIModel(LLM):
             raise RuntimeError(f"[Req {request_id}] Vertex AI failed after 10 retries")
 
         # Extract token counts from new SDK response format
-        input_tokens = response.usage_metadata.prompt_token_count if response.usage_metadata else 0
-        output_tokens = response.usage_metadata.candidates_token_count if response.usage_metadata else 0
+        # Handle None values for token counts (can happen with certain responses)
+        input_tokens = 0
+        output_tokens = 0
+        if response.usage_metadata:
+            input_tokens = response.usage_metadata.prompt_token_count or 0
+            output_tokens = response.usage_metadata.candidates_token_count or 0
 
         async with self._throttle_lock:
             total = input_tokens + output_tokens
@@ -231,18 +243,59 @@ class APIModel(LLM):
         schema: Optional[Type[BaseModel]] = None,
         show_progress: bool = True,
         task_desc: Optional[str] = None,
+        max_concurrency: Optional[int] = None,
     ) -> List[Tuple[str, int, int]]:
-        """Generate responses sequentially (one at a time) to avoid rate limiting."""
-        results: List[Tuple[str, int, int]] = []
+        """
+        Generate responses with configurable parallelism.
+
+        Args:
+            max_concurrency: Max concurrent requests. None = sequential, 0 = unlimited.
+                            Recommended: 5-20 depending on rate limits.
+        """
         desc = task_desc if task_desc else f"Generating ({self.model_name})"
 
-        iterator = enumerate(prompts)
-        if show_progress:
-            iterator = tqdm(list(iterator), desc=desc)
+        # Sequential mode (default for backward compatibility)
+        if max_concurrency is None:
+            results: List[Tuple[str, int, int]] = []
+            iterator = enumerate(prompts)
+            if show_progress:
+                iterator = tqdm(list(iterator), desc=desc)
+            for idx, (sys_msg, user_msg) in iterator:
+                result = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
+                results.append(result)
+            return results
 
-        for idx, (sys_msg, user_msg) in iterator:
-            result = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
-            results.append(result)
+        # Parallel mode with semaphore for concurrency control
+        semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
+        results = [None] * len(prompts)
+        completed = [0]  # Use list for mutable counter in closure
+
+        pbar = tqdm(total=len(prompts), desc=desc) if show_progress else None
+
+        async def process_one(idx: int, sys_msg: str, user_msg: str):
+            if semaphore:
+                async with semaphore:
+                    result = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
+            else:
+                result = await self._generate_single(sys_msg, user_msg, schema, request_id=idx)
+
+            results[idx] = result
+            completed[0] += 1
+            if pbar:
+                pbar.update(1)
+            return result
+
+        # Create all tasks
+        tasks = [
+            process_one(idx, sys_msg, user_msg)
+            for idx, (sys_msg, user_msg) in enumerate(prompts)
+        ]
+
+        # Run all tasks concurrently
+        await asyncio.gather(*tasks)
+
+        if pbar:
+            pbar.close()
 
         return results
 
@@ -252,8 +305,28 @@ class APIModel(LLM):
         schema: Optional[Type[BaseModel]] = None,
         show_progress: bool = True,
         task_desc: Optional[str] = None,
+        max_concurrency: Optional[int] = -1,  # -1 means use instance default
         **kwargs
     ) -> List[Tuple[str, int, int]]:
+        """
+        Generate responses for multiple prompts.
+
+        Args:
+            max_concurrency: Max concurrent requests.
+                            -1 = use instance default (self.max_concurrency)
+                            None = sequential (safest)
+                            10-20 = recommended for parallel with rate limiting
+                            0 = unlimited (use with caution)
+        """
+        # Use instance default if not specified
+        if max_concurrency == -1:
+            max_concurrency = self.max_concurrency
+
         return asyncio.run(
-            self.generate_async(prompts, schema, show_progress=show_progress, task_desc=task_desc)
+            self.generate_async(
+                prompts, schema,
+                show_progress=show_progress,
+                task_desc=task_desc,
+                max_concurrency=max_concurrency
+            )
         )

@@ -24,6 +24,7 @@ gemini_gen = APIModel(
     tpm_limit=2000000,
     temperature=1.0,
     disable_thinking=True,  # Disable thinking
+    max_concurrency=10,  # Parallel processing (10 concurrent requests)
 )
 
 # Gemini 2.5 Pro - for evaluations (best reasoning, with thinking enabled)
@@ -33,6 +34,7 @@ gemini_eval = APIModel(
     tpm_limit=2000000,
     temperature=0.0,
     disable_thinking=False,  # Keep thinking enabled for better evaluation
+    max_concurrency=10,  # Parallel processing (10 concurrent requests)
 )
 
 llm_evaluator = LLM_Evaluator(gemini_eval)  # Use 2.5 Pro for LLM evaluation
@@ -108,7 +110,7 @@ print(f"Test data: {len(hard_questions)} hard questions + {len(random_indices)} 
 print(f"Test indices: {all_test_indices}")
 
 # RAG-enhanced methods for all three prompting strategies
-methods = [ "cot_rag", "stepback_calc_rag", "medrac_rag", "direct_rag"]
+methods = ["medrac_rag", "stepback_calc_rag", "stepback_rag", "direct_rag", "cot_rag"]
 
 for style in methods:
     print(f"\n{'='*60}")

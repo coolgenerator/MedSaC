@@ -47,19 +47,43 @@ def load_eval_files(eval_dir: str = "eval_output") -> Dict[str, List[Dict]]:
     return evals
 
 
-def load_error_type_files(error_dir: str = "ErrorTypes") -> Dict[str, List[Dict]]:
-    """Load all error type analysis JSON files."""
+def load_error_type_files(error_dir: str = "ErrorTypes", eval_dir: str = "eval_output") -> Dict[str, List[Dict]]:
+    """
+    Load all error type analysis JSON files.
+
+    Handles two filename formats:
+    1. New format with method name: VertexAI_gemini-2.5-flash_cot_rag_error_eval.json
+    2. Old format without method name: VertexAI_gemini-2.5-flash_error_eval.json
+
+    For old format files, uses 'unknown_method' as a fallback key.
+    Note: For complete error analysis per method, re-run error_type_pipeline for each method.
+    """
     errors = {}
+
     for file in Path(error_dir).glob("*_error_eval.json"):
-        # Filename format: VertexAI_gemini-2.5-flash_cot_rag_error_eval.json
         parts = file.stem.split("_")
+
         # Find the method name (between model name and "error")
-        # parts = ["VertexAI", "gemini-2.5-flash", "cot", "rag", "error", "eval"]
-        error_idx = parts.index("error") if "error" in parts else -2
-        method = "_".join(parts[2:error_idx])
+        if "error" in parts:
+            error_idx = parts.index("error")
+            method = "_".join(parts[2:error_idx])
+        else:
+            method = ""
 
         with open(file, "r") as f:
-            errors[method] = json.load(f)
+            data = json.load(f)
+
+        if method:
+            # New format - method is in filename
+            errors[method] = data
+        else:
+            # Old format - file doesn't have method name
+            # Use 'unknown_method' as key since we can't determine which method it's from
+            # Note: Each method evaluates the same questions, so one file = one method's results
+            errors["unknown_method"] = data
+            print(f"  Warning: ErrorTypes file '{file.name}' doesn't include method name.")
+            print(f"  To get error analysis per method, re-run error_type_pipeline after run.py")
+
     return errors
 
 
@@ -455,9 +479,10 @@ def plot_detailed_eval_results(evals: Dict[str, List[Dict]], output_dir: str = "
     print(f"Saved: {output_dir}/calculator_heatmap.png")
 
 
-def plot_llm_eval_error_counts(evals: Dict[str, List[Dict]], output_dir: str = "visualizations"):
+def plot_llm_eval_error_counts(evals: Dict[str, List[Dict]], errors: Dict[str, List[Dict]] = None, output_dir: str = "visualizations"):
     """
-    Plot LLM evaluation error COUNTS (not rates) for each method.
+    Plot error COUNTS (not rates) for each method.
+    Uses 8 detailed error types from ErrorTypes if available, otherwise uses 4 from LLM Evaluation.
     Shows exact numbers like Table 4 in the original paper.
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -466,37 +491,84 @@ def plot_llm_eval_error_counts(evals: Dict[str, List[Dict]], output_dir: str = "
         print("No evaluation files found")
         return
 
-    # Error types from LLM Evaluation
-    error_types = ['formula', 'extracted_values', 'calculation', 'answer']
-    labels = ['Formula\nError', 'Variable\nExtraction', 'Calculation\nError', 'Answer\nError']
-
     methods = list(evals.keys())
 
-    # Count errors for each method
-    error_counts = {}
-    for method, records in evals.items():
-        error_counts[method] = {et: 0 for et in error_types}
-        error_counts[method]['total'] = len(records)
-        error_counts[method]['incorrect'] = 0
+    # Check if we have ErrorTypes data with 8 detailed error types for ALL methods
+    # Only use 8-type mode when ALL methods have ErrorTypes data for consistency
+    use_detailed_errors = errors and all(m in errors for m in methods)
 
-        for record in records:
-            if record.get("Result") == "Incorrect":
-                error_counts[method]['incorrect'] += 1
+    if use_detailed_errors:
+        # Use 8 detailed error types from ErrorTypes
+        error_columns = [
+            "Formula Error",
+            "Missing Variables",
+            "Missing or Misused Demographic/Adjustment Coefficients",
+            "Unit Conversion Error",
+            "Arithmetic Errors",
+            "Rounding / Precision Errors",
+            "Incorrect Variable Extraction",
+            "Clinical Misinterpretation (Rule-based Only)",
+        ]
+        labels = [
+            "Formula", "Missing\nVars", "Demo\nCoeff", "Unit\nConv",
+            "Arith", "Round", "Var\nExtract", "Clinical\nMisinterp"
+        ]
 
-            llm_eval = record.get("LLM Evaluation", {})
-            for et in error_types:
-                if llm_eval.get(et, {}).get("result") == "Incorrect":
-                    error_counts[method][et] += 1
+        # Count errors from ErrorTypes data
+        error_counts = {}
+        for method in methods:
+            if method not in errors:
+                continue
+            records = errors[method]
+            error_counts[method] = {'total': len(records), 'incorrect': 0}
+
+            # Count incorrect from evals
+            for record in evals.get(method, []):
+                if record.get("Result") == "Incorrect":
+                    error_counts[method]['incorrect'] += 1
+
+            # Count each error type
+            for col in error_columns:
+                count = sum(1 for r in records if r.get(col) == "Yes")
+                error_counts[method][col] = count
+
+        methods = [m for m in methods if m in error_counts]
+        error_types = error_columns
+    else:
+        # Fallback to 4 error types from LLM Evaluation
+        error_types = ['formula', 'extracted_values', 'calculation', 'answer']
+        labels = ['Formula\nError', 'Variable\nExtraction', 'Calculation\nError', 'Answer\nError']
+
+        error_counts = {}
+        for method, records in evals.items():
+            error_counts[method] = {et: 0 for et in error_types}
+            error_counts[method]['total'] = len(records)
+            error_counts[method]['incorrect'] = 0
+
+            for record in records:
+                if record.get("Result") == "Incorrect":
+                    error_counts[method]['incorrect'] += 1
+
+                llm_eval = record.get("LLM Evaluation", {})
+                if not isinstance(llm_eval, dict):
+                    continue
+
+                for et in error_types:
+                    et_data = llm_eval.get(et, {})
+                    if isinstance(et_data, list) and len(et_data) > 0:
+                        et_data = et_data[0]
+                    if isinstance(et_data, dict) and et_data.get("result") == "Incorrect":
+                        error_counts[method][et] += 1
 
     # --- Plot: Error counts bar chart ---
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(14, 7))
 
     x = np.arange(len(error_types))
-    width = 0.8 / len(methods)
+    width = 0.8 / len(methods) if methods else 0.8
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f39c12']
 
     for i, method in enumerate(methods):
-        counts = [error_counts[method][et] for et in error_types]
+        counts = [error_counts[method].get(et, 0) for et in error_types]
         offset = width * (i - len(methods)/2 + 0.5)
         bars = ax.bar(x + offset, counts, width, label=method.replace('_', ' ').title(),
                      color=colors[i % len(colors)], alpha=0.85)
@@ -507,41 +579,55 @@ def plot_llm_eval_error_counts(evals: Dict[str, List[Dict]], output_dir: str = "
             if height > 0:
                 ax.annotate(f'{int(height)}', xy=(bar.get_x() + bar.get_width()/2, height),
                            xytext=(0, 3), textcoords="offset points", ha='center', va='bottom',
-                           fontsize=10, fontweight='bold')
+                           fontsize=9, fontweight='bold')
 
     ax.set_xlabel('Error Type', fontsize=12)
     ax.set_ylabel('Error Count', fontsize=12)
-    ax.set_title('LLM Evaluation Error Counts by Method', fontsize=14, fontweight='bold')
+    title = 'Detailed Error Counts by Method (8 Types)' if use_detailed_errors else 'LLM Evaluation Error Counts by Method'
+    ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_xticklabels(labels, fontsize=9)
     ax.legend(loc='upper right', fontsize=10)
 
-    # Add grid for readability
     ax.yaxis.grid(True, linestyle='--', alpha=0.7)
     ax.set_axisbelow(True)
 
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/llm_eval_error_counts.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{output_dir}/error_counts.png", dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Saved: {output_dir}/llm_eval_error_counts.png")
+    print(f"Saved: {output_dir}/error_counts.png")
 
     # --- Print summary table ---
-    print("\n" + "=" * 70)
-    print("LLM Evaluation Error Counts (Table 4 Style)")
-    print("=" * 70)
-    header = f"{'Method':<20} {'Total':<8} {'Incorrect':<10} {'Formula':<10} {'Extraction':<12} {'Calculation':<12} {'Answer':<10}"
-    print(header)
-    print("-" * 70)
+    print("\n" + "=" * 100)
+    print("Error Counts by Method (Table 4 Style)")
+    print("=" * 100)
 
-    for method in methods:
-        row = f"{method.replace('_', ' ').title():<20} "
-        row += f"{error_counts[method]['total']:<8} "
-        row += f"{error_counts[method]['incorrect']:<10} "
-        row += f"{error_counts[method]['formula']:<10} "
-        row += f"{error_counts[method]['extracted_values']:<12} "
-        row += f"{error_counts[method]['calculation']:<12} "
-        row += f"{error_counts[method]['answer']:<10}"
-        print(row)
+    if use_detailed_errors:
+        header = f"{'Method':<18} {'Total':<6} {'Wrong':<6} "
+        header += " ".join([f"{l.replace(chr(10), ' '):<8}" for l in labels])
+        print(header)
+        print("-" * 100)
+
+        for method in methods:
+            row = f"{method.replace('_', ' ').title():<18} "
+            row += f"{error_counts[method]['total']:<6} "
+            row += f"{error_counts[method]['incorrect']:<6} "
+            row += " ".join([f"{error_counts[method].get(et, 0):<8}" for et in error_types])
+            print(row)
+    else:
+        header = f"{'Method':<20} {'Total':<8} {'Incorrect':<10} {'Formula':<10} {'Extraction':<12} {'Calculation':<12} {'Answer':<10}"
+        print(header)
+        print("-" * 100)
+
+        for method in methods:
+            row = f"{method.replace('_', ' ').title():<20} "
+            row += f"{error_counts[method]['total']:<8} "
+            row += f"{error_counts[method]['incorrect']:<10} "
+            row += f"{error_counts[method].get('formula', 0):<10} "
+            row += f"{error_counts[method].get('extracted_values', 0):<12} "
+            row += f"{error_counts[method].get('calculation', 0):<12} "
+            row += f"{error_counts[method].get('answer', 0):<10}"
+            print(row)
 
     return error_counts
 
@@ -730,8 +816,8 @@ def main():
 
     if evals:
         plot_detailed_eval_results(evals, output_dir)
-        # LLM Evaluation error counts (like Table 4 in paper)
-        plot_llm_eval_error_counts(evals, output_dir)
+        # Error counts (like Table 4 in paper) - uses 8 types if ErrorTypes available
+        plot_llm_eval_error_counts(evals, errors, output_dir)
 
     # Error type analysis from ErrorTypes folder (8 detailed error types)
     if errors:
